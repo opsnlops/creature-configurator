@@ -31,130 +31,151 @@ struct ContentView: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading) {
-            Text("Creature Configuration Generator")
-                .font(.largeTitle)
-                .padding(.bottom, 20)
+        ScrollView {
+            VStack(alignment: .leading) {
+                Text("Creature Configuration Generator")
+                    .font(.largeTitle)
+                    .padding(.bottom, 5)
 
-            HStack {
-                Text("USB VID:")
-                TextField("Enter VID", text: $usbVID)
-                    .frame(width: 100)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-            }
+                Button(action: readFromFile) {
+                    Label("Read existing configuration from .bin file", systemImage: "folder.badge.plus")
+                }
+                .buttonStyle(.bordered)
+                .padding(.bottom, 10)
 
-            HStack {
-                Text("USB PID:")
-                TextField("Enter PID", text: $usbPID)
-                    .frame(width: 100)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-            }
+                .alert(isPresented: $showAlert) {
+                    Alert(title: Text("Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
+                }
 
-            Divider().padding(.vertical, 10)
+                Divider().padding(.vertical, 10)
 
-            HStack {
-                Text("Version:")
-                Stepper(value: $versionMajor, in: 0...99) {
-                    Text("Major: \(versionMajor)")
-                }.frame(width: 120)
+                Text("USB Device Configuration")
+                    .font(.title2)
 
-                Stepper(value: $versionMinor, in: 0...99) {
-                    Text("Minor: \(versionMinor)")
-                }.frame(width: 120)
-            }
 
-            HStack {
-                Text("Logging Level:")
-                Picker("Select Logging Level", selection: $loggingLevel) {
-                    ForEach(logLevels, id: \.1) { level in
-                        Text(level.0).tag(level.1)
+                HStack {
+                    Text("USB VID:")
+                    TextField("Enter VID", text: $usbVID)
+                        .frame(width: 100)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+
+                HStack {
+                    Text("USB PID:")
+                    TextField("Enter PID", text: $usbPID)
+                        .frame(width: 100)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+
+
+                HStack {
+                    Text("Version:")
+                    Stepper(value: $versionMajor, in: 0...99) {
+                        Text("Major: \(versionMajor)")
+                    }.frame(width: 120)
+
+                    Stepper(value: $versionMinor, in: 0...99) {
+                        Text("Minor: \(versionMinor)")
+                    }.frame(width: 120)
+                }
+
+                Divider().padding(.vertical, 10)
+
+
+
+
+
+
+                Text("Application Config")
+                    .font(.title2)
+
+                HStack {
+                    Text("Serial Number:")
+                    TextField("Enter Serial Number", text: $serialNumber)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+
+                HStack {
+                    Text("Product Name:")
+                    TextField("Enter Product Name", text: $productName)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+
+                HStack {
+                    Text("Manufacturer:")
+                    TextField("Enter Manufacturer", text: $manufacturer)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+
+                VStack {
+                    Picker("Logging Level:", selection: $loggingLevel) {
+                        ForEach(logLevels, id: \.1) { level in
+                            Text(level.0).tag(level.1)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+
+                }
+
+                Divider().padding(.vertical, 10)
+
+                Text("Custom Strings")
+                    .font(.title2)
+
+                // Custom user-defined strings
+                ForEach(0..<customStrings.count, id: \.self) { index in
+                    HStack {
+                        Text("Custom String \(index + 1):")
+                        TextField("Enter Custom String", text: $customStrings[index])
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                        Button(action: {
+                            customStrings.remove(at: index)
+                        }) {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(BorderlessButtonStyle())
                     }
                 }
-                .pickerStyle(SegmentedPickerStyle())
-                .frame(width: 300)
-            }
 
-            Divider().padding(.vertical, 10)
 
-            HStack {
-                Text("Serial Number:")
-                TextField("Enter Serial Number", text: $serialNumber)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-            }
+                Button(action: {
+                    customStrings.append("")
+                }) {
+                    Label("Add a Custom String", systemImage: "plus")
+                }
+                .padding(.vertical)
+                .buttonStyle(.automatic)
 
-            HStack {
-                Text("Product Name:")
-                TextField("Enter Product Name", text: $productName)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-            }
+                Divider().padding(.vertical, 10)
 
-            HStack {
-                Text("Manufacturer:")
-                TextField("Enter Manufacturer", text: $manufacturer)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-            }
 
-            Divider().padding(.vertical, 10)
-
-            // Custom user-defined strings
-            ForEach(0..<customStrings.count, id: \.self) { index in
                 HStack {
-                    Text("Custom String \(index + 1):")
-                    TextField("Enter Custom String", text: $customStrings[index])
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+
+                    Spacer()
 
                     Button(action: {
-                        customStrings.remove(at: index)
+                        logger.log("Generate Configuration Files button pressed")
+                        if isValid {
+                            generateConfigFiles()
+                        } else {
+                            showError()
+                        }
                     }) {
-                        Image(systemName: "trash")
+                        Label("Generate Configuration Files", systemImage: "square.and.arrow.down.fill")
                     }
-                    .buttonStyle(BorderlessButtonStyle())
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!isValid)
+                    .cornerRadius(5)
                 }
-            }
 
-            // Button to add more custom strings
-            Button(action: {
-                customStrings.append("")
-            }) {
-                Text("Add Another Custom String")
-                    .fontWeight(.bold)
-            }
-            .padding(.vertical)
 
-            Divider().padding(.vertical, 10)
-
-            Button(action: {
-                logger.log("Generate Configuration Files button pressed")
-                if isValid {
-                    generateConfigFiles()
-                } else {
-                    showError()
-                }
-            }) {
-                Text("Generate Configuration Files")
-                    .fontWeight(.bold)
             }
-            .padding()
-            .background(isValid ? Color.blue : Color.gray)
-            .foregroundColor(.white)
-            .cornerRadius(5)
-            .disabled(!isValid)
-
-            Button(action: readFromFile) {
-                Text("Read Configuration from .bin File")
-                    .fontWeight(.bold)
-            }
-            .padding()
-            .background(Color.green)
-            .foregroundColor(.white)
-            .cornerRadius(5)
-
-            .alert(isPresented: $showAlert) {
-                Alert(title: Text("Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")))
-            }
+            .frame(maxHeight: .infinity)
+            .padding(10)
         }
-        .padding(20)
-        .frame(width: 500)
+        .padding(0)
+        .frame(width: 550)
     }
 
     // MARK: - Validation Functions
