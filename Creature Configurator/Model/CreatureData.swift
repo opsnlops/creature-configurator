@@ -1,8 +1,10 @@
 
+import Foundation
+
 /**
  Very simple struct that contains the data we need
  */
-struct CreatureData: Hashable {
+struct CreatureData: Hashable, Equatable, Sendable {
 
     var usbVID: String = "2E8A"
     var usbPID: String = ""

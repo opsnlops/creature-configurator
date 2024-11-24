@@ -9,59 +9,37 @@ struct DataFileCreator {
 
     // MARK: Generate files
 
+    @MainActor
     static func generateConfigFiles(data: CreatureData) -> Result<String, DataFileError> {
-        guard let vid = UInt16(data.usbVID, radix: 16), let pid = UInt16(data.usbPID, radix: 16) else {
-            logger.error("Invalid USB VID or PID")
-            return .failure(.invalidData("Invalid USB VID or PID"))
+
+        logger.info("Creating the binary data")
+        var binaryData: Data
+
+        switch(EEPROMDataGenerator.createEEPROMData(creatureData: data)) {
+        case .success(let data):
+            binaryData = data
+        case .failure(let error):
+            logger.error("Failed to generate the binary data: \(error.localizedDescription)")
+            return .failure(error)
         }
-
-        logger.log("Generating binary and C file content")
-        let serialData = Array(data.serialNumber.utf8)
-        let productData = Array(data.productName.utf8)
-        let manufacturerData = Array(data.manufacturer.utf8)
-
-        var binaryData = Data()
-
-        // "HOP!" magic number
-        binaryData.append("HOP!".data(using: .ascii)!)
-
-        // VID, PID
-        binaryData.append(contentsOf: withUnsafeBytes(of: vid.bigEndian) { Data($0) })
-        binaryData.append(contentsOf: withUnsafeBytes(of: pid.bigEndian) { Data($0) })
-
-        // Version (BCD format)
-        let versionBCD = UInt16((data.versionMajor << 8) | data.versionMinor)
-        binaryData.append(contentsOf: withUnsafeBytes(of: versionBCD.bigEndian) { Data($0) })
-
-        // Logging level
-        binaryData.append(UInt8(data.loggingLevel))
-
-        // Serial number
-        binaryData.append(UInt8(serialData.count))
-        binaryData.append(contentsOf: serialData)
-
-        // Product name
-        binaryData.append(UInt8(productData.count))
-        binaryData.append(contentsOf: productData)
-
-        // Manufacturer
-        binaryData.append(UInt8(manufacturerData.count))
-        binaryData.append(contentsOf: manufacturerData)
-
-        // Append custom strings if they exist
-        for customString in data.customStrings {
-            let stringData = Array(customString.utf8)
-            binaryData.append(UInt8(stringData.count))
-            binaryData.append(contentsOf: stringData)
-        }
-
-        logger.log("Binary data generated: \(binaryData.count) bytes")
 
         // Save the binary file
-        _ = saveBinaryFile(binaryData: binaryData)
+        switch(saveBinaryFile(binaryData: binaryData)){
+        case .success(let message):
+            logger.info("Binary file successfully saved: \(message)")
+        case .failure(let error):
+            logger.error("Failed to save binary file: \(error.localizedDescription)")
+            return .failure(error)
+        }
 
         // Save the C source file
-        _ = saveCFile(data: binaryData)
+        switch(saveCFile(data: binaryData)) {
+        case .success(let message):
+            logger.info("C file successfully saved: \(message)")
+        case .failure(let error):
+            logger.error("C to save binary file: \(error.localizedDescription)")
+            return .failure(error)
+        }
 
         return .success("Files successfully generated")
     }
@@ -83,6 +61,7 @@ struct DataFileCreator {
 
     // MARK: Save files to disk
 
+    @MainActor
     static func saveBinaryFile(binaryData: Data) -> Result<String, DataFileError> {
         let savePanel = NSSavePanel()
         savePanel.title = "Save Binary File"
@@ -101,6 +80,7 @@ struct DataFileCreator {
         }
     }
 
+    @MainActor
     static func saveCFile(data: Data) -> Result<String, DataFileError> {
         let savePanel = NSSavePanel()
         savePanel.title = "Save C File"
@@ -125,6 +105,7 @@ struct DataFileCreator {
 
     // MARK: - Reading from a .bin File
 
+    @MainActor
     static func readFromFile() -> Result<CreatureData, DataFileError> {
         let openPanel = NSOpenPanel()
         openPanel.title = "Select Configuration Binary File"

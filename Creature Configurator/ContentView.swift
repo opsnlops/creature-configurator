@@ -1,8 +1,13 @@
+
+import Foundation
+import os
 import SwiftUI
 import UniformTypeIdentifiers
-import os
+
 
 struct ContentView: View {
+
+    @EnvironmentObject var serialManager: SerialDeviceManagerWrapper
 
     // VID 0x2E8A has been set aside for Pico-based projects for folks that don't have
     // a VID of their own assigned from the USB-IF.
@@ -19,7 +24,12 @@ struct ContentView: View {
     @State private var showAlert = false
     @State private var alertMessage: String = ""
 
-    let logger = Logger(subsystem: "creature.engineering.CreatureConfiguratator", category: "fileGeneration")
+
+    @State private var connectTask: Task<Void, Never>? = nil
+    @State private var disconnectTask: Task<Void, Never>? = nil
+    @State private var burnTask: Task<Void, Never>? = nil
+
+    let logger = Logger(subsystem: "creature.engineering.CreatureConfiguratator", category: "ContentView")
 
     var isValid: Bool {
         return isValidVID() && isValidPID() && !serialNumber.isEmpty && !productName.isEmpty && !manufacturer.isEmpty && customStrings.allSatisfy { !$0.isEmpty }
@@ -34,6 +44,7 @@ struct ContentView: View {
         ("Fatal", 0)
     ]
 
+    // MARK: View Body
     var body: some View {
         ScrollView {
             VStack(alignment: .leading) {
@@ -156,6 +167,20 @@ struct ContentView: View {
 
                 HStack {
 
+                    Button(action: {
+                        logger.log("Write EEPROM data button pressed")
+                        if isValid {
+                            uploadAndBurnConfigToProgrammer()
+                        } else {
+                            showValidationError()
+                        }
+                    }) {
+                        Label("Write data to EEPROM", systemImage: "memorychip")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!isValid || (serialManager.state != .connected))
+                    .cornerRadius(5)
+
                     Spacer()
 
                     Button(action: {
@@ -172,6 +197,47 @@ struct ContentView: View {
                     .disabled(!isValid)
                     .cornerRadius(5)
                 }
+
+                Divider()
+                    .padding(.vertical, 10)
+
+                HStack {
+
+                    Button(action: {
+                        logger.debug("Programmer connection button clicked")
+                        if serialManager.state == .disconnected {
+                            connectToSerialPort()
+                        }
+                        else {
+                            disconnectFromSerialPort()
+                        }
+                    }) {
+                        Image(systemName: serialManager.state == .connected ? "cable.connector" : "cable.connector.slash")
+                            .contentTransition(.symbolEffect(.replace))
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .buttonStyle(.borderless)
+                    .symbolRenderingMode(.palette)
+
+
+
+                    Text(serialManager.state.description)
+                        .font(.caption)
+
+                    Spacer()
+
+                    if let programmerInfo = serialManager.programmerInfo {
+                        Text("\(programmerInfo.version)")
+                            .font(.caption)
+                    }
+
+
+
+
+                }
+
+
+
 
 
             }
@@ -287,8 +353,124 @@ struct ContentView: View {
 
     }
 
+
+    // MARK: Serial Port Functions
+
+
+    func uploadAndBurnConfigToProgrammer() {
+
+
+        if let burnTask {
+            burnTask.cancel()
+        }
+
+        burnTask = Task {
+
+            logger.info("🎉 starting the upload and burn process")
+
+            logger.debug("starting upload")
+            await uploadConfigToProgrammer()
+
+            logger.debug("starting burn")
+            await burnUploadedConfigToEEPROM()
+
+            logger.debug("verifying burn")
+            await verifyBurnedEEPROM()
+
+            logger.info("upload and burn process complete")
+        }
+
+
+    }
+
+
+    func uploadConfigToProgrammer() async {
+        logger.debug("uploading data to the programmer")
+
+        let uploadResult = serialManager.uploadConfigToProgrammer(creatureData: createCreatureData())
+        switch(uploadResult) {
+        case .success:
+            logger.info("uploaded data to the programmer")
+
+        case .failure(let error):
+            logger.error("Error uploading data to the programmer: \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                alertMessage = "Error uploading data to the programmer: \(error.localizedDescription)"
+                showAlert = true
+            }
+        }
+    }
+
+    func burnUploadedConfigToEEPROM() async {
+        logger.debug("telling the programmer to burn the EEPROM")
+
+        let burnResult = serialManager.burnUploadedDataToEEPROM()
+        switch(burnResult) {
+        case .success:
+            logger.info("the programmer has burned the EEPROM")
+
+        case .failure(let error):
+            logger.error("Error burning the uploaded data to the EEPROM: \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                alertMessage = "Error burning the uploaded data to the EEPROM: \(error.localizedDescription)"
+                showAlert = true
+            }
+        }
+    }
+
+    func verifyBurnedEEPROM() async {
+        logger.debug("asking the programmer to verify the EEPROM")
+
+        let verifyResult = serialManager.verifyBurnedEEPROM()
+        switch(verifyResult) {
+        case .success:
+            logger.info("the programmer has verifed the EEPROM")
+
+        case .failure(let error):
+            logger.error("Error verifying the data on the EEPROM: \(error.localizedDescription)")
+            DispatchQueue.main.async {
+                alertMessage = "Error verifying the data on the EEPROM: \(error.localizedDescription)"
+                showAlert = true
+            }
+        }
+    }
+
+
+    func connectToSerialPort() {
+
+        logger.info("attempting to connect to the programmer")
+
+        // If there's one of these already, stop it
+        if let connectTask {
+            connectTask.cancel()
+        }
+
+        connectTask = Task {
+            serialManager.connect()
+        }
+
+    }
+
+    func disconnectFromSerialPort() {
+
+        logger.info("attempting to disconnect from the programmer")
+
+        // If there's one of these already, stop it
+        if let disconnectTask {
+            disconnectTask.cancel()
+        }
+
+        disconnectTask = Task {
+            serialManager.disconnect()
+        }
+
+    }
+
 }
 
+
+// MARK: Preview
 #Preview {
     ContentView()
+        .environmentObject(SerialDeviceManagerWrapper.mock())
 }
