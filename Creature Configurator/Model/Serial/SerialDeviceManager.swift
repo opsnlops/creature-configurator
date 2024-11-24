@@ -84,6 +84,9 @@ actor SerialDeviceManager {
         }
 
         do {
+            // Start off fresh and clean
+            clearIncomingBuffer()
+
             // Send the command to the device
             let bytesWritten = try serialPort.writeString("I\n")
             logger.debug("Requested programmer info, \(bytesWritten) bytes written")
@@ -116,6 +119,30 @@ actor SerialDeviceManager {
     }
 
 
+    func clearIncomingBuffer() {
+
+        // Ensure we're connected
+        guard serialState == .connected else {
+            logger.error("Unable to reset the incoming buffer if we're disconnected")
+            return
+        }
+
+        // Ensure the serial port is valid
+        guard let serialPort else {
+            logger.error("Unable to reset the incoming buffer because serialPort is nil")
+            return
+        }
+
+        do {
+            let resetChar = Data([0x1B])
+            _ = try serialPort.writeData(resetChar)
+            logger.debug("reset the incoming buffer")
+        } catch {
+            logger.warning("Unable to reset the incoming buffer: \(error.localizedDescription)")
+        }
+
+    }
+
     func burnEEPROM() async -> Result<String, ProgrammerError> {
         // Ensure we're connected
         guard serialState == .connected else {
@@ -130,6 +157,9 @@ actor SerialDeviceManager {
         }
 
         do {
+            // Start off fresh and clean
+            clearIncomingBuffer()
+
             let bytesWritten = try serialPort.writeString("B\n")
             logger.debug("Told the programmer to burn the EEPROM (bytes written: \(bytesWritten))")
 
@@ -171,6 +201,10 @@ actor SerialDeviceManager {
         }
 
         do {
+
+            // Start off fresh and clean
+            clearIncomingBuffer()
+
             let bytesWritten = try serialPort.writeString("V\n")
             logger.debug("Told the programmer to verify the EEPROM (bytes written: \(bytesWritten))")
 
@@ -214,9 +248,13 @@ actor SerialDeviceManager {
 
 
         do {
+            // Start off fresh and clean
+            clearIncomingBuffer()
+
             // Send the load command
             var bytesWritten = try serialPort.writeString("L\(data.count)\n")
             logger.debug("Told the programmer we want to write \(data.count) bytes. (\(bytesWritten) bytes written)")
+
 
             // Wait for the "GO_AHEAD" response
             logger.debug("Waiting for the programmer to tell us to go ahead...")
