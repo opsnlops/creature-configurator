@@ -278,7 +278,7 @@ struct ContentView: View {
 
 
 
-    // MARK: File Manipulation Functions
+    // MARK: - File Manipulation Functions
 
     func createCreatureData() -> CreatureData {
         CreatureData(
@@ -354,7 +354,7 @@ struct ContentView: View {
     }
 
 
-    // MARK: Serial Port Functions
+    // MARK: - Serial Port Functions
 
 
     func uploadAndBurnConfigToProgrammer() {

@@ -23,8 +23,10 @@ actor SerialDeviceManager {
     private let chunkSize = 6 // Number of bytes per chunk
     private let interChunkDelay: TimeInterval = 0.03 // 30 ms delay
 
+    // How long should we pause to let the UART catch up? (time in ns)
+    private let commandProcessingTime: UInt64 = 400_000_000
 
-    // MARK: Establishing and stopping a connection
+    // MARK: - Establishing and stopping a connection
 
     func connect() async -> Result<String, Error> {
 
@@ -68,7 +70,7 @@ actor SerialDeviceManager {
     }
 
 
-    // MARK: Working with programmer
+    // MARK: - Working with programmer
 
     func getProgrammerInfo() async -> Result<ProgrammerInfo, ProgrammerError> {
         // Ensure we're connected
@@ -85,7 +87,7 @@ actor SerialDeviceManager {
 
         do {
             // Start off fresh and clean
-            clearIncomingBuffer()
+            await clearIncomingBuffer()
 
             // Send the command to the device
             let bytesWritten = try serialPort.writeString("I\n")
@@ -119,7 +121,7 @@ actor SerialDeviceManager {
     }
 
 
-    func clearIncomingBuffer() {
+    func clearIncomingBuffer() async {
 
         // Ensure we're connected
         guard serialState == .connected else {
@@ -136,6 +138,7 @@ actor SerialDeviceManager {
         do {
             let resetChar = Data([0x1B])
             _ = try serialPort.writeData(resetChar)
+            try await Task.sleep(nanoseconds: commandProcessingTime)
             logger.debug("reset the incoming buffer")
         } catch {
             logger.warning("Unable to reset the incoming buffer: \(error.localizedDescription)")
@@ -158,7 +161,8 @@ actor SerialDeviceManager {
 
         do {
             // Start off fresh and clean
-            clearIncomingBuffer()
+            await clearIncomingBuffer()
+            try await Task.sleep(nanoseconds: commandProcessingTime)
 
             let bytesWritten = try serialPort.writeString("B\n")
             logger.debug("Told the programmer to burn the EEPROM (bytes written: \(bytesWritten))")
@@ -203,7 +207,7 @@ actor SerialDeviceManager {
         do {
 
             // Start off fresh and clean
-            clearIncomingBuffer()
+            await clearIncomingBuffer()
 
             let bytesWritten = try serialPort.writeString("V\n")
             logger.debug("Told the programmer to verify the EEPROM (bytes written: \(bytesWritten))")
@@ -249,7 +253,7 @@ actor SerialDeviceManager {
 
         do {
             // Start off fresh and clean
-            clearIncomingBuffer()
+            await clearIncomingBuffer()
 
             // Send the load command
             var bytesWritten = try serialPort.writeString("L\(data.count)\n")
